@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>La Maledizione delle Cinque Giornate</title>
 
-
   <!-- Librerie A-Frame e MindAR (Combinazione ultra-stabile mobile) -->
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
@@ -88,14 +87,15 @@
         return wall;
       };
 
+      // Parete Fondo, Soffitto e Base (Inclinata leggermente verso il basso per evitare compenetrazioni)
       boxGroup.appendChild(createWall(planeWidth, planeHeight, "0 0 -0.005", "0 0 0", boxTextures.back));
       boxGroup.appendChild(createWall(planeWidth, maxDepth, `0 0.5 ${topCenterZ}`, "90 0 0", boxTextures.top));
-      boxGroup.appendChild(createWall(planeWidth, bottomDepth, `0 -0.5 ${bottomCenterZ}`, "-90 0 0", boxTextures.bottom));
+      boxGroup.appendChild(createWall(planeWidth, bottomDepth, `0 -0.52 ${bottomCenterZ}`, "-90 0 0", boxTextures.bottom));
 
       targetEntity.appendChild(boxGroup);
 
       // ==========================================
-      // 2. LAYER 3D ANIMATI
+      // 2. I 4 LAYER Z (CORRETTA LA SCALA PER LAYER 04)
       // ==========================================
       for (let i = 1; i <= totalLayers; i++) {
         const layerNumber = String(i).padStart(2, '0');
@@ -119,7 +119,9 @@
         if (i > 1) {
           const targetZ = (i - 1) * stepDepth;
           const delayTime = (i - 1) * stagger;
-          const scaleFactor = 1 + ((i - 1) / (totalLayers - 1)) * 0.28;
+          
+          // Ridotta leggermente l'espansione (0.15 invece di 0.28) per non far sporgere il layer 4 dal pavimento
+          const scaleFactor = 1 + ((i - 1) / (totalLayers - 1)) * 0.15;
 
           plane.setAttribute("animation__pos", `
             property: position;
@@ -146,15 +148,16 @@
       }
 
       // ==========================================
-      // 3. SISTEMA NEBBIA AZZURRA
+      // 3. NEBBIA AZZURRA (ALZATA LA POSIZIONE Y)
       // ==========================================
       const fogContainer = document.createElement("a-entity");
       fogContainer.setAttribute("id", "fog-system");
 
+      // Posizione Y impostata a -0.25/-0.30 per far fluttuare la nebbia SOPRA il pavimento
       const fogLayersConfig = [
-        { texture: "./images/fog_cloud1.png", z: stepDepth * 0.8, xStart: -0.15, xEnd: 0.15, dur: 7000, scale: "0.9 0.4 1", opacity: 0.65 },
-        { texture: "./images/fog_cloud2.png", z: stepDepth * 1.8, xStart: 0.18, xEnd: -0.12, dur: 9500, scale: "1.0 0.5 1", opacity: 0.50 },
-        { texture: "./images/fog_cloud3.png", z: stepDepth * 2.8, xStart: -0.08, xEnd: 0.20, dur: 6000, scale: "1.1 0.6 1", opacity: 0.40 }
+        { texture: "./images/fog_cloud1.png", z: stepDepth * 0.8, y: -0.25, xStart: -0.15, xEnd: 0.15, dur: 7000, scale: "0.8 0.35 1", opacity: 0.65 },
+        { texture: "./images/fog_cloud2.png", z: stepDepth * 1.8, y: -0.28, xStart: 0.18, xEnd: -0.12, dur: 9500, scale: "0.9 0.40 1", opacity: 0.50 },
+        { texture: "./images/fog_cloud3.png", z: stepDepth * 2.8, y: -0.30, xStart: -0.08, xEnd: 0.20, dur: 6000, scale: "1.0 0.45 1", opacity: 0.40 }
       ];
 
       fogLayersConfig.forEach((cfg, idx) => {
@@ -163,7 +166,7 @@
         fogPlane.setAttribute("src", cfg.texture);
         fogPlane.setAttribute("width", "1");
         fogPlane.setAttribute("height", "1");
-        fogPlane.setAttribute("position", `${cfg.xStart} -0.42 ${cfg.z.toFixed(4)}`);
+        fogPlane.setAttribute("position", `${cfg.xStart} ${cfg.y} ${cfg.z.toFixed(4)}`);
         fogPlane.setAttribute("scale", cfg.scale);
         
         fogPlane.setAttribute("material", `
@@ -178,7 +181,7 @@
 
         fogPlane.setAttribute("animation__drift", `
           property: position;
-          to: ${cfg.xEnd} -0.42 ${cfg.z.toFixed(4)};
+          to: ${cfg.xEnd} ${cfg.y} ${cfg.z.toFixed(4)};
           dir: alternate;
           loop: true;
           dur: ${cfg.dur};
