@@ -61,12 +61,12 @@
       // ==========================================
       const boxTextures = {
         back: "./images/box_back.png",
-        top: "./images/box_top.png",
-        bottom: "./images/box_bottom.png"
+        bottom: "./images/box_bottom.png",
+        fogCeiling: "./images/fog_cloud1.png" // Texture usata per il soffitto di nebbia
       };
 
       // ==========================================
-      // 1. SCATOLA 3D ADATTATA AI 874x1240 PX
+      // 1. SCATOLA 3D CON SOFFITTO IN NEBBIA ANIMATA
       // ==========================================
       const boxGroup = document.createElement("a-entity");
       boxGroup.setAttribute("id", "diorama-box");
@@ -87,15 +87,49 @@
         return wall;
       };
 
-      // Parete Fondo, Soffitto e Base (Inclinata leggermente verso il basso per evitare compenetrazioni)
+      // Parete Fondo e Pavimento
       boxGroup.appendChild(createWall(planeWidth, planeHeight, "0 0 -0.005", "0 0 0", boxTextures.back));
-      boxGroup.appendChild(createWall(planeWidth, maxDepth, `0 0.5 ${topCenterZ}`, "90 0 0", boxTextures.top));
-      boxGroup.appendChild(createWall(planeWidth, bottomDepth, `0 -0.52 ${bottomCenterZ}`, "-90 0 0", boxTextures.bottom));
+      boxGroup.appendChild(createWall(planeWidth, bottomDepth, `0 -0.5 ${bottomCenterZ}`, "-90 0 0", boxTextures.bottom));
 
+      // SOFFITTO DI NEBBIA ANIMATA (Sostituisce box_top.png)
+      const fogCeiling = document.createElement("a-plane");
+      fogCeiling.setAttribute("width", planeWidth);
+      fogCeiling.setAttribute("height", maxDepth);
+      fogCeiling.setAttribute("position", `0 0.5 ${topCenterZ}`);
+      fogCeiling.setAttribute("rotation", "90 0 0");
+      fogCeiling.setAttribute("src", boxTextures.fogCeiling);
+      fogCeiling.setAttribute("material", `
+        transparent: true;
+        opacity: 0.7;
+        side: double;
+        depthTest: true;
+        blending: additive;
+      `);
+
+      // Animazione di scorrimento/fluttuazione della nebbia a soffitto
+      fogCeiling.setAttribute("animation__drift", `
+        property: position;
+        to: 0 0.52 ${topCenterZ};
+        dir: alternate;
+        loop: true;
+        dur: 5000;
+        easing: easeInOutSine;
+      `);
+      fogCeiling.setAttribute("animation__fade", `
+        property: material.opacity;
+        from: 0.4;
+        to: 0.8;
+        dir: alternate;
+        loop: true;
+        dur: 4000;
+        easing: easeInOutQuad;
+      `);
+
+      boxGroup.appendChild(fogCeiling);
       targetEntity.appendChild(boxGroup);
 
       // ==========================================
-      // 2. I 4 LAYER Z (CORRETTA LA SCALA PER LAYER 04)
+      // 2. I 4 LAYER Z (ANCORATI IN BASSO AL PAVIMENTO)
       // ==========================================
       for (let i = 1; i <= totalLayers; i++) {
         const layerNumber = String(i).padStart(2, '0');
@@ -104,7 +138,11 @@
         plane.setAttribute("src", `./images/layer${layerNumber}.png`);
         plane.setAttribute("width", planeWidth);
         plane.setAttribute("height", planeHeight);
-        plane.setAttribute("position", "0 0 0");
+        
+        // Pivot impostato a Y = -0.5 (Base del rettangolo) e posizione Y shifted a -0.5
+        // In questo modo il punto di appoggio rimane fisso a Y = -0.5 (livello del pavimento)
+        plane.setAttribute("geometry", `primitive: plane; width: ${planeWidth}; height: ${planeHeight}; pivot: 0 -0.5 0;`);
+        plane.setAttribute("position", "0 -0.5 0");
         plane.setAttribute("scale", "1 1 1");
         
         plane.setAttribute("material", `
@@ -119,14 +157,12 @@
         if (i > 1) {
           const targetZ = (i - 1) * stepDepth;
           const delayTime = (i - 1) * stagger;
-          
-          // Ridotta leggermente l'espansione (0.15 invece di 0.28) per non far sporgere il layer 4 dal pavimento
-          const scaleFactor = 1 + ((i - 1) / (totalLayers - 1)) * 0.15;
+          const scaleFactor = 1 + ((i - 1) / (totalLayers - 1)) * 0.20;
 
           plane.setAttribute("animation__pos", `
             property: position;
-            from: 0 0 0;
-            to: 0 0 ${targetZ.toFixed(4)};
+            from: 0 -0.5 0;
+            to: 0 -0.5 ${targetZ.toFixed(4)};
             dur: ${openDur};
             delay: ${delayTime};
             easing: ${easingType};
@@ -148,16 +184,15 @@
       }
 
       // ==========================================
-      // 3. NEBBIA AZZURRA (ALZATA LA POSIZIONE Y)
+      // 3. NEBBIA AZZURRA INTERNA AL DIORAMA
       // ==========================================
       const fogContainer = document.createElement("a-entity");
       fogContainer.setAttribute("id", "fog-system");
 
-      // Posizione Y impostata a -0.25/-0.30 per far fluttuare la nebbia SOPRA il pavimento
       const fogLayersConfig = [
-        { texture: "./images/fog_cloud1.png", z: stepDepth * 0.8, y: -0.25, xStart: -0.15, xEnd: 0.15, dur: 7000, scale: "0.8 0.35 1", opacity: 0.65 },
-        { texture: "./images/fog_cloud2.png", z: stepDepth * 1.8, y: -0.28, xStart: 0.18, xEnd: -0.12, dur: 9500, scale: "0.9 0.40 1", opacity: 0.50 },
-        { texture: "./images/fog_cloud3.png", z: stepDepth * 2.8, y: -0.30, xStart: -0.08, xEnd: 0.20, dur: 6000, scale: "1.0 0.45 1", opacity: 0.40 }
+        { texture: "./images/fog_cloud1.png", z: stepDepth * 0.8, y: -0.30, xStart: -0.15, xEnd: 0.15, dur: 7000, scale: "0.9 0.40 1", opacity: 0.65 },
+        { texture: "./images/fog_cloud2.png", z: stepDepth * 1.8, y: -0.28, xStart: 0.18, xEnd: -0.12, dur: 9500, scale: "1.1 0.50 1", opacity: 0.55 },
+        { texture: "./images/fog_cloud3.png", z: stepDepth * 2.8, y: -0.25, xStart: -0.08, xEnd: 0.20, dur: 6000, scale: "1.3 0.60 1", opacity: 0.45 }
       ];
 
       fogLayersConfig.forEach((cfg, idx) => {
@@ -190,7 +225,7 @@
 
         fogPlane.setAttribute("animation__fade", `
           property: material.opacity;
-          from: ${cfg.opacity * 0.4};
+          from: ${cfg.opacity * 0.35};
           to: ${cfg.opacity};
           dir: alternate;
           loop: true;
@@ -204,6 +239,6 @@
       targetEntity.appendChild(fogContainer);
     });
   </script>
-
+  
 </body>
 </html>
