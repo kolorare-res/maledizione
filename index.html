@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>La maledizione delle cinque giornate</title>
+
+  <!-- Librerie A-Frame 1.4.2 e MindAR 1.2.5 -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+  <!-- File di configurazione -->
+  <script src="./config.js"></script>
+
+  <style>
+    body { margin: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+
+  <a-scene 
+    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.001; filterBeta: 10;" 
+    color-space="sRGB" 
+    renderer="colorManagement: true, physicallyCorrectLights" 
+    vr-mode-ui="enabled: false" 
+    device-orientation-permission-ui="enabled: false">
+
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <!-- Contenitore dell'opera riconosciuta: Altrove -->
+    <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+    </a-entity>
+
+  </a-scene>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const targetEntity = document.querySelector("#ar-target");
+
+      const totalLayers = config.layers || 6;
+      const maxDepth = config.maxDepth || 0.6;
+      const openDur = config.openDuration || 1500;
+      const stagger = config.staggerDelay || 120;
+      const easingType = config.easing || "easeOutCubic";
+
+      const stepDepth = totalLayers > 1 ? (maxDepth / (totalLayers - 1)) : 0;
+      
+      // Profondità soffitto (pari a maxDepth)
+      const topCenterZ = maxDepth / 2;
+
+      // Profondità extra base (sporge del 40% in più)
+      const bottomDepth = maxDepth * 1.4; 
+      const bottomCenterZ = bottomDepth / 2;
+
+      // ==========================================
+      // TEXTURE FONDO, SOFFITTO E BASE
+      // ==========================================
+      const boxTextures = {
+        back: "./images/box_back.png",     // Texture parete fondo (quadrata)
+        top: "./images/box_top.png",       // Texture soffitto
+        bottom: "./images/box_bottom.png"  // Texture base allungata
+      };
+
+      // ==========================================
+      // 1. STRUTTURA SCATOLA 3D: BACK + TOP + BOTTOM ALLUNGATO
+      // ==========================================
+      const boxGroup = document.createElement("a-entity");
+      boxGroup.setAttribute("id", "diorama-box");
+
+      const createWall = (width, height, position, rotation, texturePath) => {
+        const wall = document.createElement("a-plane");
+        wall.setAttribute("width", width);
+        wall.setAttribute("height", height);
+        wall.setAttribute("position", position);
+        wall.setAttribute("rotation", rotation);
+        
+        if (texturePath) {
+          wall.setAttribute("src", texturePath);
+          wall.setAttribute("material", "transparent: true; alphaTest: 0.5; side: double; depthTest: true;");
+        } else {
+          wall.setAttribute("material", "color: #1a1a1a; roughness: 0.8; side: double; depthTest: true;");
+        }
+        
+        return wall;
+      };
+
+      // PARETE DI FONDO (Z = 0)
+      boxGroup.appendChild(createWall("1", "1", "0 0 -0.005", "0 0 0", boxTextures.back));
+
+      // PARETE SUPERIORE (SOFFITTO)
+      boxGroup.appendChild(createWall("1", maxDepth, `0 0.5 ${topCenterZ}`, "90 0 0", boxTextures.top));
+
+      // PARETE INFERIORE (BASE ALLUNGATA TOWARDS THE CAMERA)
+      boxGroup.appendChild(createWall("1", bottomDepth, `0 -0.5 ${bottomCenterZ}`, "-90 0 0", boxTextures.bottom));
+
+      targetEntity.appendChild(boxGroup);
+
+      // ==========================================
+      // 2. LAYER Z ALL'INTERNO DELLA SCATOLA
+      // ==========================================
+      for (let i = 1; i <= totalLayers; i++) {
+        const layerNumber = String(i).padStart(2, '0');
+        const plane = document.createElement("a-plane");
+        
+        plane.setAttribute("src", `./images/layer${layerNumber}.png`);
+        plane.setAttribute("width", "1");
+        plane.setAttribute("height", "1");
+        plane.setAttribute("position", "0 0 0");
+        plane.setAttribute("scale", "1 1 1");
+        
+        plane.setAttribute("material", `
+          transparent: true; 
+          alphaTest: 0.5; 
+          side: front;
+          depthTest: true;
+        `);
+        
+        plane.setAttribute("render-order", 10 + i);
+
+        if (i > 1) {
+          const targetZ = (i - 1) * stepDepth;
+          const delayTime = (i - 1) * stagger;
+          const scaleFactor = 1 + ((i - 1) / (totalLayers - 1)) * 0.28;
+
+          plane.setAttribute("animation__pos", `
+            property: position;
+            from: 0 0 0;
+            to: 0 0 ${targetZ.toFixed(4)};
+            dur: ${openDur};
+            delay: ${delayTime};
+            easing: ${easingType};
+            fill: forwards;
+          `);
+
+          plane.setAttribute("animation__scale", `
+            property: scale;
+            from: 1 1 1;
+            to: ${scaleFactor} ${scaleFactor} 1;
+            dur: ${openDur};
+            delay: ${delayTime};
+            easing: ${easingType};
+            fill: forwards;
+          `);
+        }
+
+        targetEntity.appendChild(plane);
+      }
+    });
+  </script>
+
+</body>
+</html>
