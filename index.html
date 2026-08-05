@@ -9,8 +9,38 @@
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
-  <!-- Configurazioni esterne (opzionali) -->
-  <script src="./config.js"></script>
+  <!-- Componente personalizzato per ELIMINARE il traballamento (LERP Filter) -->
+  <script>
+    AFRAME.registerComponent('smooth-tracker', {
+      schema: {
+        factor: { type: 'number', default: 0.15 } // Più è basso (es. 0.08 - 0.15), più la scena è "rocciosa" e stabile
+      },
+      init: function () {
+        this.targetPos = new THREE.Vector3();
+        this.targetQuat = new THREE.Quaternion();
+        this.targetScale = new THREE.Vector3();
+        this.hasTarget = false;
+
+        this.el.addEventListener('targetFound', () => { this.hasTarget = true; });
+        this.el.addEventListener('targetLost', () => { this.hasTarget = false; });
+      },
+      tick: function () {
+        if (!this.hasTarget) return;
+
+        // Recupera la posizione teorica calcolata da MindAR
+        const object3D = this.el.object3D;
+        
+        // Applica l'interpolazione fluida (LERP) verso la posizione reale
+        if (this.prevPos) {
+          object3D.position.lerp(this.prevPos, 1 - this.data.factor);
+          object3D.quaternion.slerp(this.prevQuat, 1 - this.data.factor);
+        }
+
+        this.prevPos = object3D.position.clone();
+        this.prevQuat = object3D.quaternion.clone();
+      }
+    });
+  </script>
 
   <style>
     body { margin: 0; overflow: hidden; }
@@ -18,18 +48,18 @@
 </head>
 <body>
 
-  <!-- Scena AR con parametri anti-traballamento -->
+  <!-- MindAR con impostazioni di tracciamento ad alta precisione -->
   <a-scene 
-    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.0001; filterBeta: 1000; warmups: 5; missTolerance: 5;" 
+    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.00001; filterBeta: 0.001; missTolerance: 8;" 
     color-space="sRGB" 
-    renderer="colorManagement: true, physicallyCorrectLights" 
+    renderer="colorManagement: true, physicallyCorrectLights; antialias: true;" 
     vr-mode-ui="enabled: false" 
     device-orientation-permission-ui="enabled: false">
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- Contenitore del target riconosciuto -->
-    <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+    <!-- Applicato il componente smooth-tracker per congelare i micro-tremolii -->
+    <a-entity id="ar-target" mindar-image-target="targetIndex: 0" smooth-tracker="factor: 0.12">
     </a-entity>
 
   </a-scene>
@@ -41,16 +71,13 @@
       // ==========================================
       // DIMENSIONI E GEOMETRIA (Supporto 8x8 cm)
       // ==========================================
-      const planeWidth = "1";   // Rapporto 1:1 (8 cm)
-      const planeHeight = "1";  // Rapporto 1:1 (8 cm)
+      const planeWidth = "1";   
+      const planeHeight = "1";  
 
-      // Profondità frontale massima (3.5 cm su 8 cm = 0.4375)
       const maxDepth = 0.4375; 
-      const backOffsetZ = -0.005; // Posizione esatta del retro per evitare z-fighting
-
-      // FIX SPIGOLO: Il pavimento copre perfettamente da Z = -0.005 a Z = 0.4375
-      const bottomLength = maxDepth - backOffsetZ; // 0.4425
-      const bottomCenterZ = backOffsetZ + (bottomLength / 2); // 0.21625
+      const backOffsetZ = -0.005; 
+      const bottomLength = maxDepth - backOffsetZ; 
+      const bottomCenterZ = backOffsetZ + (bottomLength / 2); 
 
       // ==========================================
       // TEXTURE STRUTTURA SCATOLA
@@ -61,7 +88,7 @@
       };
 
       // ==========================================
-      // 1. SCATOLA 3D (BACK + BOTTOM PERFETTAMENTE COMBACIANTE)
+      // 1. SCATOLA 3D (BACK + BOTTOM)
       // ==========================================
       const boxGroup = document.createElement("a-entity");
       boxGroup.setAttribute("id", "diorama-box");
@@ -82,22 +109,18 @@
         return wall;
       };
 
-      // Parete Fondo (8x8 cm)
       boxGroup.appendChild(createWall(planeWidth, planeHeight, `0 0 ${backOffsetZ}`, "0 0 0", boxTextures.back));
-
-      // Pavimento (Allineato al millimetro allo spigolo di fondo)
       boxGroup.appendChild(createWall(planeWidth, bottomLength, `0 -0.505 ${bottomCenterZ.toFixed(4)}`, "-90 0 0", boxTextures.bottom));
 
       targetEntity.appendChild(boxGroup);
 
       // ==========================================
-      // 2. I 3 LAYER Z (POSIZIONAMENTO MANUALE Z)
+      // 2. I 3 LAYER Z
       // ==========================================
-      // >>> MODIFICA QUI IL PRIMO VALORE PER LAYER01 <<<
       const layerPositionsZ = [
-        0.1100,  // <-- LAYER 01: Aumentato per staccarlo di più dal fondo
-        0.2737,  // <-- LAYER 02: Posizione intermedia
-        0.4375   // <-- LAYER 03: Bordo frontale del pavimento
+        0.1100,  // Layer 01
+        0.2737,  // Layer 02
+        0.4375   // Layer 03
       ];
 
       for (let i = 1; i <= 3; i++) {
@@ -124,18 +147,15 @@
       }
 
       // ==========================================
-      // 3. NEBBIA ANIMATA INTERNA (NEBBIA ALTA AMPLIFICATA)
+      // 3. NEBBIA ANIMATA INTERNA
       // ==========================================
       const fogContainer = document.createElement("a-entity");
       fogContainer.setAttribute("id", "fog-system");
 
       const fogLayersConfig = [
-        // Nebbia inferiore
         { texture: "./images/fog_cloud1.png", z: 0.12, y: -0.35, xStart: -0.15, xEnd: 0.15, dur: 3500, scale: "0.9 0.40 1", opacity: 0.65 },
         { texture: "./images/fog_cloud2.png", z: 0.28, y: -0.32, xStart: 0.18, xEnd: -0.12, dur: 4500, scale: "1.1 0.50 1", opacity: 0.55 },
         { texture: "./images/fog_cloud3.png", z: 0.38, y: -0.28, xStart: -0.08, xEnd: 0.20, dur: 3000, scale: "1.3 0.60 1", opacity: 0.45 },
-        
-        // NEBBIA ALTA: Altezza raddoppiata (0.70) e posizionata a Y = +0.15
         { texture: "./images/fog_cloud1.png", z: 0.25, y: 0.15, xStart: -0.18, xEnd: 0.18, dur: 4200, scale: "1.2 0.70 1", opacity: 0.55 }
       ];
 
