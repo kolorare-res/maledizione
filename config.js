@@ -1,7 +1,7 @@
 const config = {
-  layers: 4,             // Numero dei layer
-  maxDepth: 0.6,         // Profondità del tunnel 3D
-  openDuration: 1500,    // Durata animazione (ms)
-  staggerDelay: 140,     // Ritardo tra i layer (ms)
-  easing: "easeOutCubic" // Curva dell'animazione
+  layers: 3,           // Ridotto da 4 a 3 layer
+  maxDepth: 0.4375,    // Nuova profondità (3.5 cm / 8 cm)
+  openDuration: 1500,  // Durata dell'animazione di apertura (ms)
+  staggerDelay: 140,   // Ritardo tra l'apertura di un layer e l'altro (ms)
+  easing: "easeOutCubic"
 };
