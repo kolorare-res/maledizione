@@ -9,7 +9,7 @@
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
-  <!-- Configurazioni esterne (opzionali/fallback) -->
+  <!-- Configurazioni esterne (opzionali) -->
   <script src="./config.js"></script>
 
   <style>
@@ -18,8 +18,9 @@
 </head>
 <body>
 
+  <!-- Scena AR con parametri anti-traballamento avanzati (filterMinCF molto basso, filterBeta elevato) -->
   <a-scene 
-    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.001; filterBeta: 10;" 
+    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.0001; filterBeta: 1000; warmups: 5; missTolerance: 5;" 
     color-space="sRGB" 
     renderer="colorManagement: true, physicallyCorrectLights" 
     vr-mode-ui="enabled: false" 
@@ -37,27 +38,14 @@
     document.addEventListener("DOMContentLoaded", () => {
       const targetEntity = document.querySelector("#ar-target");
 
-      // Lettura configurazione sicura con fallback
-      const safeConfig = (typeof config !== "undefined") ? config : {};
-      
-      const openDur = safeConfig.openDuration || 1500;
-      const stagger = safeConfig.staggerDelay || 140;
-      const easingType = safeConfig.easing || "easeOutCubic";
-
       // ==========================================
       // DIMENSIONI E GEOMETRIA (Supporto 8x8 cm)
       // ==========================================
       const planeWidth = "1";   // Rapporto 1:1 (8 cm)
       const planeHeight = "1";  // Rapporto 1:1 (8 cm)
 
-      // Profondità calcolata: 3.5 cm su 8 cm = 0.4375
+      // Profondità calcolata del pavimento: 3.5 cm su 8 cm = 0.4375
       const maxDepth = 0.4375; 
-      const totalLayers = 3;   // layer01, layer02, layer03
-      
-      // Spaziatura Z tra i 3 layer (3.5 cm / (3 - 1) = 1.75 cm per ciascun passaggio)
-      const stepDepth = maxDepth / (totalLayers - 1); 
-
-      // Centro del pavimento lungo l'asse Z
       const bottomCenterZ = maxDepth / 2;
 
       // ==========================================
@@ -69,7 +57,7 @@
       };
 
       // ==========================================
-      // 1. SCATOLA 3D (BACK + BOTTOM SOLO)
+      // 1. SCATOLA 3D (BACK + BOTTOM)
       // ==========================================
       const boxGroup = document.createElement("a-entity");
       boxGroup.setAttribute("id", "diorama-box");
@@ -90,25 +78,36 @@
         return wall;
       };
 
-      // Parete Fondo (8x8 cm, posizionata a Z = -0.005 per evitare z-fighting con layer01)
+      // Parete Fondo (8x8 cm)
       boxGroup.appendChild(createWall(planeWidth, planeHeight, "0 0 -0.005", "0 0 0", boxTextures.back));
 
-      // Pavimento (8x3.5 cm, ancorato a Y = -0.5 e posizionato da Z = 0 a Z = 0.4375)
+      // Pavimento (8x3.5 cm)
       boxGroup.appendChild(createWall(planeWidth, maxDepth, `0 -0.505 ${bottomCenterZ.toFixed(4)}`, "-90 0 0", boxTextures.bottom));
 
       targetEntity.appendChild(boxGroup);
 
       // ==========================================
-      // 2. I 3 LAYER Z (layer01, layer02, layer03)
+      // 2. I 3 LAYER Z (GIA IN POSIZIONE FINALE)
       // ==========================================
-      for (let i = 1; i <= totalLayers; i++) {
+      // Layer 01 viene staccato dal fondo verso la fotocamera (Z = 0.06)
+      // Layer 02 e 03 si distribuiscono fino alla fine del pavimento (Z = 0.4375)
+      const layerPositionsZ = [
+        0.0600,  // layer01: avanzato rispetto alla parete di fondo
+        0.2487,  // layer02: posizione intermedia
+        0.4375   // layer03: allineato con il bordo del pavimento
+      ];
+
+      for (let i = 1; i <= 3; i++) {
         const layerNumber = String(i).padStart(2, '0');
         const plane = document.createElement("a-plane");
         
         plane.setAttribute("src", `./images/layer${layerNumber}.png`);
         plane.setAttribute("width", planeWidth);
         plane.setAttribute("height", planeHeight);
-        plane.setAttribute("position", "0 0 0");
+        
+        // Impostiamo direttamente la posizione finale (senza animazione di apertura)
+        const posZ = layerPositionsZ[i - 1];
+        plane.setAttribute("position", `0 0 ${posZ.toFixed(4)}`);
         plane.setAttribute("scale", "1 1 1");
         
         plane.setAttribute("material", `
@@ -119,37 +118,25 @@
         `);
         
         plane.setAttribute("render-order", 10 + i);
-
-        if (i > 1) {
-          // targetZ per i = 2 -> 0.2188 | targetZ per i = 3 -> 0.4375 (coincide esattamente con la fine del bottom)
-          const targetZ = (i - 1) * stepDepth;
-          const delayTime = (i - 1) * stagger;
-
-          plane.setAttribute("animation__pos", `
-            property: position;
-            from: 0 0 0;
-            to: 0 0 ${targetZ.toFixed(4)};
-            dur: ${openDur};
-            delay: ${delayTime};
-            easing: ${easingType};
-            fill: forwards;
-          `);
-        }
-
         targetEntity.appendChild(plane);
       }
 
       // ==========================================
-      // 3. NEBBIA ANIMATA INTERNA (Movimenti più veloci)
+      // 3. NEBBIA ANIMATA INTERNA + NEBBIA IN ALTO (5cm dall'alto)
       // ==========================================
       const fogContainer = document.createElement("a-entity");
       fogContainer.setAttribute("id", "fog-system");
 
-      // Durate ridotte (da 6000-9500ms a 3000-4500ms) per velocizzare il movimento
+      // Calcolo Y per i 5 cm dall'alto: 
+      // Bordo superiore = +0.5. 5cm su 8cm = 0.625 unità totali dall'origine -> Y = +0.5 - 0.375 = +0.125
       const fogLayersConfig = [
-        { texture: "./images/fog_cloud1.png", z: stepDepth * 0.6, y: -0.35, xStart: -0.15, xEnd: 0.15, dur: 3500, scale: "0.9 0.40 1", opacity: 0.65 },
-        { texture: "./images/fog_cloud2.png", z: stepDepth * 1.3, y: -0.32, xStart: 0.18, xEnd: -0.12, dur: 4500, scale: "1.1 0.50 1", opacity: 0.55 },
-        { texture: "./images/fog_cloud3.png", z: stepDepth * 1.9, y: -0.28, xStart: -0.08, xEnd: 0.20, dur: 3000, scale: "1.3 0.60 1", opacity: 0.45 }
+        // Nebbia inferiore veloce
+        { texture: "./images/fog_cloud1.png", z: 0.12, y: -0.35, xStart: -0.15, xEnd: 0.15, dur: 3500, scale: "0.9 0.40 1", opacity: 0.65 },
+        { texture: "./images/fog_cloud2.png", z: 0.28, y: -0.32, xStart: 0.18, xEnd: -0.12, dur: 4500, scale: "1.1 0.50 1", opacity: 0.55 },
+        { texture: "./images/fog_cloud3.png", z: 0.38, y: -0.28, xStart: -0.08, xEnd: 0.20, dur: 3000, scale: "1.3 0.60 1", opacity: 0.45 },
+        
+        // NUOVO LIVELLO: Nebbia alta a 5 cm dall'alto (Y = +0.125)
+        { texture: "./images/fog_cloud1.png", z: 0.25, y: 0.125, xStart: -0.20, xEnd: 0.20, dur: 4000, scale: "1.2 0.35 1", opacity: 0.60 }
       ];
 
       fogLayersConfig.forEach((cfg, idx) => {
@@ -171,6 +158,7 @@
         
         fogPlane.setAttribute("render-order", 50 + idx);
 
+        // Movimento orizzontale fluttuante
         fogPlane.setAttribute("animation__drift", `
           property: position;
           to: ${cfg.xEnd} ${cfg.y} ${cfg.z.toFixed(4)};
