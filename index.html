@@ -9,28 +9,22 @@
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
-  <!-- Componente personalizzato per ELIMINARE il traballamento (LERP Filter) -->
+  <!-- Componente LERP bilanciato per reattività + stabilità -->
   <script>
     AFRAME.registerComponent('smooth-tracker', {
       schema: {
-        factor: { type: 'number', default: 0.15 } // Più è basso (es. 0.08 - 0.15), più la scena è "rocciosa" e stabile
+        factor: { type: 'number', default: 0.35 } // Aumentato a 0.35 per inseguimento reattivo senza lag
       },
       init: function () {
-        this.targetPos = new THREE.Vector3();
-        this.targetQuat = new THREE.Quaternion();
-        this.targetScale = new THREE.Vector3();
         this.hasTarget = false;
-
         this.el.addEventListener('targetFound', () => { this.hasTarget = true; });
         this.el.addEventListener('targetLost', () => { this.hasTarget = false; });
       },
       tick: function () {
         if (!this.hasTarget) return;
 
-        // Recupera la posizione teorica calcolata da MindAR
         const object3D = this.el.object3D;
         
-        // Applica l'interpolazione fluida (LERP) verso la posizione reale
         if (this.prevPos) {
           object3D.position.lerp(this.prevPos, 1 - this.data.factor);
           object3D.quaternion.slerp(this.prevQuat, 1 - this.data.factor);
@@ -48,9 +42,9 @@
 </head>
 <body>
 
-  <!-- MindAR con impostazioni di tracciamento ad alta precisione -->
+  <!-- MindAR con parametri bilanciati per il nuovo Target Zebra/QR -->
   <a-scene 
-    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.00001; filterBeta: 0.001; missTolerance: 8;" 
+    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.001; filterBeta: 0.01; missTolerance: 5;" 
     color-space="sRGB" 
     renderer="colorManagement: true, physicallyCorrectLights; antialias: true;" 
     vr-mode-ui="enabled: false" 
@@ -58,8 +52,8 @@
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- Applicato il componente smooth-tracker per congelare i micro-tremolii -->
-    <a-entity id="ar-target" mindar-image-target="targetIndex: 0" smooth-tracker="factor: 0.12">
+    <!-- Factor impostato a 0.35 per un riaggancio immediato durante i movimenti -->
+    <a-entity id="ar-target" mindar-image-target="targetIndex: 0" smooth-tracker="factor: 0.35">
     </a-entity>
 
   </a-scene>
@@ -118,9 +112,9 @@
       // 2. I 3 LAYER Z
       // ==========================================
       const layerPositionsZ = [
-        0.1100,  // Layer 01
+        0.1900,  // Layer 01
         0.2737,  // Layer 02
-        0.4375   // Layer 03
+        0.4375   // Layer 03 (Duomo, fine del pavimento)
       ];
 
       for (let i = 1; i <= 3; i++) {
@@ -147,16 +141,19 @@
       }
 
       // ==========================================
-      // 3. NEBBIA ANIMATA INTERNA
+      // 3. NEBBIA ANIMATA INTERNA (TUTTI I LIVELLI IN BASSO)
       // ==========================================
       const fogContainer = document.createElement("a-entity");
       fogContainer.setAttribute("id", "fog-system");
 
       const fogLayersConfig = [
         { texture: "./images/fog_cloud1.png", z: 0.12, y: -0.35, xStart: -0.15, xEnd: 0.15, dur: 3500, scale: "0.9 0.40 1", opacity: 0.65 },
-        { texture: "./images/fog_cloud2.png", z: 0.28, y: -0.32, xStart: 0.18, xEnd: -0.12, dur: 4500, scale: "1.1 0.50 1", opacity: 0.55 },
-        { texture: "./images/fog_cloud3.png", z: 0.38, y: -0.28, xStart: -0.08, xEnd: 0.20, dur: 3000, scale: "1.3 0.60 1", opacity: 0.45 },
-        { texture: "./images/fog_cloud1.png", z: 0.25, y: 0.15, xStart: -0.18, xEnd: 0.18, dur: 4200, scale: "1.2 0.70 1", opacity: 0.55 }
+        { texture: "./images/fog_cloud2.png", z: 0.22, y: -0.32, xStart: 0.18, xEnd: -0.12, dur: 4500, scale: "1.1 0.45 1", opacity: 0.55 },
+        
+        // NUOVA POSIZIONE NEBBIA 4: Y in basso (-0.30) e Z = 0.3600 (davanti a Layer03 che sta a Z = 0.4375)
+        { texture: "./images/fog_cloud1.png", z: 0.36, y: -0.30, xStart: -0.18, xEnd: 0.18, dur: 4200, scale: "1.2 0.50 1", opacity: 0.60 },
+
+        { texture: "./images/fog_cloud3.png", z: 0.40, y: -0.28, xStart: -0.08, xEnd: 0.20, dur: 3000, scale: "1.3 0.50 1", opacity: 0.45 }
       ];
 
       fogLayersConfig.forEach((cfg, idx) => {
